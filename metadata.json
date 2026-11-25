@@ -1,0 +1,6 @@
+{
+  "name": "Bible School LMS",
+  "description": "An enrollment-driven Bible School Learning Management System with Google Meet virtual classes, automated Google Drive recording cohort sharing, live Drive resource uploads, and an interactive Cloud Architecture Specification Workbench.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

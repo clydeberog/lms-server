@@ -1,0 +1,363 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted system administrator registry entry keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "grantedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "grantedByUid", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Non-PII academic profile and approval status for an NLFBC School of Ministry LMS user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "photoUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000,
+          "pattern": "^(https://\\S+|data:image/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+)$"
+        },
+        "role": { "type": "string", "enum": ["student", "instructor", "admin"] },
+        "approvalStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "department": { "type": "string", "maxLength": 100 },
+        "registrationNote": { "type": "string", "maxLength": 500 },
+        "approvedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "approvedByName": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "RegistrationRequest": {
+      "title": "RegistrationRequest",
+      "description": "Student account registration request awaiting admin or instructor approval.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "department": { "type": "string", "maxLength": 100 },
+        "note": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "reviewedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reviewedByName": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "email", "status", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Strictly isolated PII document for an authenticated user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "updatedAt"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Bible School academic course managed by an instructor or admin.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 2, "maxLength": 24 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "term": { "type": "string", "minLength": 2, "maxLength": 48 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "instructorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "instructorEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "driveFolderId": { "type": "string", "maxLength": 256 },
+        "driveFolderUrl": { "type": "string", "maxLength": 512 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "title", "term", "instructorUid", "instructorName", "instructorEmail", "createdAt", "updatedAt"]
+    },
+    "CourseMember": {
+      "title": "CourseMember",
+      "description": "O(1) Master Gate membership record verifying a user's approved active enrollment in a course.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "enrollmentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseRole": { "type": "string", "enum": ["student", "co-instructor"] },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "memberUid", "instructorUid", "enrollmentId", "courseRole", "displayName", "joinedAt"]
+    },
+    "Enrollment": {
+      "title": "Enrollment",
+      "description": "Email-keyed roster record supporting instructor pre-enrollment and student self-enrollment requests pending approval.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseCode": { "type": "string", "minLength": 2, "maxLength": 24 },
+        "courseTitle": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "courseTerm": { "type": "string", "minLength": 2, "maxLength": 48 },
+        "instructorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "memberEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "memberUid": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "courseRole": { "type": "string", "enum": ["student", "co-instructor"] },
+        "status": { "type": "string", "enum": ["pending", "invited", "active", "revoked"] },
+        "enrolledByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "courseId",
+        "courseCode",
+        "courseTitle",
+        "courseTerm",
+        "instructorUid",
+        "instructorName",
+        "memberEmail",
+        "memberName",
+        "courseRole",
+        "status",
+        "enrolledByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Scheduled virtual class backed by Google Calendar and Google Meet v2.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 180 },
+        "description": { "type": "string", "maxLength": 1500 },
+        "scheduledStart": { "type": "string", "minLength": 10, "maxLength": 64 },
+        "scheduledEnd": { "type": "string", "minLength": 10, "maxLength": 64 },
+        "meetUri": { "type": "string", "minLength": 8, "maxLength": 512 },
+        "meetSpaceName": { "type": "string", "maxLength": 256 },
+        "meetCode": { "type": "string", "maxLength": 64 },
+        "calendarEventId": { "type": "string", "maxLength": 256 },
+        "meetInviteDeleted": { "type": "boolean" },
+        "recordingStatus": { "type": "string", "enum": ["pending", "synced", "not_recorded"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "courseId",
+        "instructorUid",
+        "title",
+        "scheduledStart",
+        "scheduledEnd",
+        "recordingStatus",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Recording": {
+      "title": "Recording",
+      "description": "Google Meet class recording stored in Drive and shared viewer-only with the approved course cohort.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "driveFileId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "conferenceRecordId": { "type": "string", "maxLength": 256 },
+        "webViewLink": { "type": "string", "minLength": 8, "maxLength": 1024 },
+        "mimeType": { "type": "string", "maxLength": 128 },
+        "durationLabel": { "type": "string", "maxLength": 64 },
+        "sharedWithCount": { "type": "number" },
+        "lastAclSyncAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "courseId",
+        "sessionId",
+        "instructorUid",
+        "title",
+        "driveFileId",
+        "webViewLink",
+        "sharedWithCount",
+        "lastAclSyncAt",
+        "createdAt"
+      ]
+    },
+    "Resource": {
+      "title": "Resource",
+      "description": "Course material uploaded to Google Drive via OAuth and shared viewer-only with the approved enrolled cohort.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "moduleTitle": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "mimeType": { "type": "string", "minLength": 3, "maxLength": 128 },
+        "sizeBytes": { "type": "number" },
+        "driveFileId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "webViewLink": { "type": "string", "minLength": 8, "maxLength": 1024 },
+        "sharedWithCount": { "type": "number" },
+        "uploadedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uploadedByName": { "type": "string", "maxLength": 120 },
+        "uploadedByRole": { "type": "string", "enum": ["instructor", "admin"] },
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sessionTitle": { "type": "string", "maxLength": 180 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "courseId",
+        "instructorUid",
+        "moduleTitle",
+        "fileName",
+        "mimeType",
+        "sizeBytes",
+        "driveFileId",
+        "webViewLink",
+        "sharedWithCount",
+        "uploadedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "Student assignment file uploaded to Google Drive via OAuth and visible only to the student and course instructor/admin.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sessionTitle": { "type": "string", "maxLength": 180 },
+        "assignmentTitle": { "type": "string", "minLength": 2, "maxLength": 180 },
+        "studentUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "mimeType": { "type": "string", "minLength": 3, "maxLength": 128 },
+        "sizeBytes": { "type": "number" },
+        "driveFileId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "webViewLink": { "type": "string", "minLength": 8, "maxLength": 1024 },
+        "status": { "type": "string", "enum": ["submitted", "graded"] },
+        "grade": { "type": "string", "maxLength": 32 },
+        "feedback": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "courseId",
+        "instructorUid",
+        "assignmentTitle",
+        "studentUid",
+        "studentName",
+        "fileName",
+        "mimeType",
+        "sizeBytes",
+        "driveFileId",
+        "webViewLink",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Course class attendance record checked automatically when a student joins Google Meet or synced by instructor/admin.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sessionTitle": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "instructorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "studentEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "status": { "type": "string", "enum": ["present", "late", "excused", "absent"] },
+        "source": { "type": "string", "enum": ["meet_join", "meet_api_sync", "manual"] },
+        "joinedAt": { "type": "string", "minLength": 10, "maxLength": 64 },
+        "meetJoinCount": { "type": "number" },
+        "markedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "courseId",
+        "sessionId",
+        "sessionTitle",
+        "instructorUid",
+        "studentUid",
+        "studentName",
+        "studentEmail",
+        "status",
+        "source",
+        "joinedAt",
+        "meetJoinCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted administrator UID registry."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Non-PII user academic profiles, roles, and registration approval status."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated PII subcollection readable only by owner or admin."
+    },
+    "/registrationRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/RegistrationRequest" },
+      "description": "Student account registration requests awaiting admin or instructor approval."
+    },
+    "/courses/{courseId}": {
+      "schema": { "$ref": "#/entities/Course" },
+      "description": "Academic courses created by instructors or admins."
+    },
+    "/courses/{courseId}/members/{memberUid}": {
+      "schema": { "$ref": "#/entities/CourseMember" },
+      "description": "Master Gate approved active memberships for O(1) subcollection authorization."
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": { "$ref": "#/entities/Enrollment" },
+      "description": "Email-keyed course enrollments supporting instructor invitations and student enrollment requests pending approval."
+    },
+    "/courses/{courseId}/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/Session" },
+      "description": "Scheduled Google Meet virtual class sessions."
+    },
+    "/courses/{courseId}/recordings/{recordingId}": {
+      "schema": { "$ref": "#/entities/Recording" },
+      "description": "Attached Google Meet recordings restricted to approved enrolled course members and staff."
+    },
+    "/courses/{courseId}/resources/{resourceId}": {
+      "schema": { "$ref": "#/entities/Resource" },
+      "description": "Instructor course materials restricted to approved enrolled course members and staff."
+    },
+    "/courses/{courseId}/submissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/Submission" },
+      "description": "Student assignment submissions visible only to the submitting student and course instructor/admin."
+    },
+    "/courses/{courseId}/attendance/{attendanceId}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "Google Meet class attendance records accessible to course instructors and admins."
+    }
+  }
+}

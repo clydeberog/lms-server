@@ -1,0 +1,723 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Global Hardened Primitives
+    // =========================================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isOptionalId(data, key) {
+      return !(key in data) || isValidId(data[key]);
+    }
+
+    function isOptionalBool(data, key) {
+      return !(key in data) || data[key] is bool;
+    }
+
+    function isOptionalPhotoUrl(data, key) {
+      return !(key in data) || (
+        data[key] is string &&
+        data[key].size() >= 1 &&
+        data[key].size() <= 100000 &&
+        (data[key].matches('^https://\\S+$') ||
+         data[key].matches('^data:image/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$'))
+      );
+    }
+
+    function isBootstrapAdmin() {
+      return isVerified() && request.auth.token.email == 'clydefrancis.berog39@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin() || (isVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isInstructor() {
+      return isAdmin() || (
+        isVerified() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor'
+      );
+    }
+
+    function isApprovedUser() {
+      return isInstructor() || (
+        isVerified() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (!('approvalStatus' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved')
+      );
+    }
+
+    function courseExists(courseId) {
+      return exists(/databases/$(database)/documents/courses/$(courseId));
+    }
+
+    function isCourseInstructor(courseId) {
+      return isVerified() &&
+        courseExists(courseId) &&
+        get(/databases/$(database)/documents/courses/$(courseId)).data.instructorUid == request.auth.uid;
+    }
+
+    function isCourseMember(courseId) {
+      return isVerified() &&
+        exists(/databases/$(database)/documents/courses/$(courseId)/members/$(request.auth.uid));
+    }
+
+    function isCourseStaff(courseId) {
+      return isAdmin() || isCourseInstructor(courseId) || (
+        isCourseMember(courseId) &&
+        get(/databases/$(database)/documents/courses/$(courseId)/members/$(request.auth.uid)).data.courseRole == 'co-instructor'
+      );
+    }
+
+    // =========================================================================
+    // Validation Blueprints (Anti-Update-Gap: called on create AND update)
+    // =========================================================================
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'grantedByUid', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'grantedByUid', 'createdAt']) &&
+        isValidId(data.uid) &&
+        isValidId(data.grantedByUid) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'photoUrl', 'role', 'approvalStatus', 'department', 'registrationNote', 'approvedByUid', 'approvedByName', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        isValidString(data.displayName, 1, 120) &&
+        isOptionalPhotoUrl(data, 'photoUrl') &&
+        data.role in ['student', 'instructor', 'admin'] &&
+        (!('approvalStatus' in data) || data.approvalStatus in ['pending', 'approved', 'rejected']) &&
+        isOptionalString(data, 'department', 100) &&
+        isOptionalString(data, 'registrationNote', 500) &&
+        isOptionalId(data, 'approvedByUid') &&
+        isOptionalString(data, 'approvedByName', 120) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidRegistrationRequest(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'email', 'department', 'note', 'status', 'reviewedByUid', 'reviewedByName', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        isValidString(data.displayName, 1, 120) &&
+        isValidString(data.email, 3, 254) &&
+        isOptionalString(data, 'department', 100) &&
+        isOptionalString(data, 'note', 500) &&
+        data.status in ['pending', 'approved', 'rejected'] &&
+        isOptionalId(data, 'reviewedByUid') &&
+        isOptionalString(data, 'reviewedByName', 120) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data) {
+      return data.keys().hasAll(['uid', 'email', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'phone', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        isValidString(data.email, 3, 254) &&
+        isOptionalString(data, 'phone', 32) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCourse(data) {
+      return data.keys().hasAll(['code', 'title', 'term', 'instructorUid', 'instructorName', 'instructorEmail', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['code', 'title', 'term', 'description', 'instructorUid', 'instructorName', 'instructorEmail', 'driveFolderId', 'driveFolderUrl', 'createdAt', 'updatedAt']) &&
+        isValidString(data.code, 2, 24) &&
+        isValidString(data.title, 2, 160) &&
+        isValidString(data.term, 2, 48) &&
+        isOptionalString(data, 'description', 2000) &&
+        isValidId(data.instructorUid) &&
+        isValidString(data.instructorName, 1, 120) &&
+        isValidString(data.instructorEmail, 3, 254) &&
+        isOptionalString(data, 'driveFolderId', 256) &&
+        isOptionalString(data, 'driveFolderUrl', 512) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCourseMember(data) {
+      return data.keys().hasAll(['courseId', 'memberUid', 'instructorUid', 'enrollmentId', 'courseRole', 'displayName', 'joinedAt']) &&
+        data.keys().hasOnly(['courseId', 'memberUid', 'instructorUid', 'enrollmentId', 'courseRole', 'displayName', 'joinedAt']) &&
+        isValidId(data.courseId) &&
+        isValidId(data.memberUid) &&
+        isValidId(data.instructorUid) &&
+        isValidId(data.enrollmentId) &&
+        data.courseRole in ['student', 'co-instructor'] &&
+        isValidString(data.displayName, 1, 120) &&
+        data.joinedAt is timestamp;
+    }
+
+    function isValidEnrollment(data) {
+      return data.keys().hasAll(['courseId', 'courseCode', 'courseTitle', 'courseTerm', 'instructorUid', 'instructorName', 'memberEmail', 'memberName', 'courseRole', 'status', 'enrolledByUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['courseId', 'courseCode', 'courseTitle', 'courseTerm', 'instructorUid', 'instructorName', 'memberEmail', 'memberUid', 'memberName', 'courseRole', 'status', 'enrolledByUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.courseId) &&
+        isValidString(data.courseCode, 2, 24) &&
+        isValidString(data.courseTitle, 2, 160) &&
+        isValidString(data.courseTerm, 2, 48) &&
+        isValidId(data.instructorUid) &&
+        isValidString(data.instructorName, 1, 120) &&
+        isValidString(data.memberEmail, 3, 254) &&
+        isOptionalString(data, 'memberUid', 128) &&
+        isValidString(data.memberName, 1, 120) &&
+        data.courseRole in ['student', 'co-instructor'] &&
+        data.status in ['pending', 'invited', 'active', 'revoked'] &&
+        isValidId(data.enrolledByUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSession(data) {
+      return data.keys().hasAll(['courseId', 'instructorUid', 'title', 'scheduledStart', 'scheduledEnd', 'recordingStatus', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['courseId', 'instructorUid', 'title', 'description', 'scheduledStart', 'scheduledEnd', 'meetUri', 'meetSpaceName', 'meetCode', 'calendarEventId', 'meetInviteDeleted', 'recordingStatus', 'createdAt', 'updatedAt']) &&
+        isValidId(data.courseId) &&
+        isValidId(data.instructorUid) &&
+        isValidString(data.title, 2, 180) &&
+        isOptionalString(data, 'description', 1500) &&
+        isValidString(data.scheduledStart, 10, 64) &&
+        isValidString(data.scheduledEnd, 10, 64) &&
+        (!('meetUri' in data) || isValidString(data.meetUri, 8, 512)) &&
+        isOptionalString(data, 'meetSpaceName', 256) &&
+        isOptionalString(data, 'meetCode', 64) &&
+        isOptionalString(data, 'calendarEventId', 256) &&
+        isOptionalBool(data, 'meetInviteDeleted') &&
+        data.recordingStatus in ['pending', 'synced', 'not_recorded'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidRecording(data) {
+      return data.keys().hasAll(['courseId', 'sessionId', 'instructorUid', 'title', 'driveFileId', 'webViewLink', 'sharedWithCount', 'lastAclSyncAt', 'createdAt']) &&
+        data.keys().hasOnly(['courseId', 'sessionId', 'instructorUid', 'title', 'driveFileId', 'conferenceRecordId', 'webViewLink', 'mimeType', 'durationLabel', 'sharedWithCount', 'lastAclSyncAt', 'createdAt']) &&
+        isValidId(data.courseId) &&
+        isValidId(data.sessionId) &&
+        isValidId(data.instructorUid) &&
+        isValidString(data.title, 1, 200) &&
+        isValidString(data.driveFileId, 1, 256) &&
+        isOptionalString(data, 'conferenceRecordId', 256) &&
+        isValidString(data.webViewLink, 8, 1024) &&
+        isOptionalString(data, 'mimeType', 128) &&
+        isOptionalString(data, 'durationLabel', 64) &&
+        data.sharedWithCount is number && data.sharedWithCount >= 0 && data.sharedWithCount <= 5000 &&
+        data.lastAclSyncAt is timestamp &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidResource(data) {
+      return data.keys().hasAll(['courseId', 'instructorUid', 'moduleTitle', 'fileName', 'mimeType', 'sizeBytes', 'driveFileId', 'webViewLink', 'sharedWithCount', 'uploadedByUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['courseId', 'instructorUid', 'moduleTitle', 'fileName', 'mimeType', 'sizeBytes', 'driveFileId', 'webViewLink', 'sharedWithCount', 'uploadedByUid', 'uploadedByName', 'uploadedByRole', 'sessionId', 'sessionTitle', 'createdAt', 'updatedAt']) &&
+        isValidId(data.courseId) &&
+        isValidId(data.instructorUid) &&
+        isValidString(data.moduleTitle, 1, 120) &&
+        isValidString(data.fileName, 1, 255) &&
+        isValidString(data.mimeType, 3, 128) &&
+        data.sizeBytes is number && data.sizeBytes >= 0 && data.sizeBytes <= 536870912 &&
+        isValidString(data.driveFileId, 1, 256) &&
+        isValidString(data.webViewLink, 8, 1024) &&
+        data.sharedWithCount is number && data.sharedWithCount >= 0 && data.sharedWithCount <= 5000 &&
+        isValidId(data.uploadedByUid) &&
+        isOptionalString(data, 'uploadedByName', 120) &&
+        (!('uploadedByRole' in data) || data.uploadedByRole in ['instructor', 'admin']) &&
+        isOptionalId(data, 'sessionId') &&
+        isOptionalString(data, 'sessionTitle', 180) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSubmission(data) {
+      return data.keys().hasAll(['courseId', 'instructorUid', 'assignmentTitle', 'studentUid', 'studentName', 'fileName', 'mimeType', 'sizeBytes', 'driveFileId', 'webViewLink', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['courseId', 'instructorUid', 'sessionId', 'sessionTitle', 'assignmentTitle', 'studentUid', 'studentName', 'fileName', 'mimeType', 'sizeBytes', 'driveFileId', 'webViewLink', 'status', 'grade', 'feedback', 'createdAt', 'updatedAt']) &&
+        isValidId(data.courseId) &&
+        isValidId(data.instructorUid) &&
+        isOptionalId(data, 'sessionId') &&
+        isOptionalString(data, 'sessionTitle', 180) &&
+        isValidString(data.assignmentTitle, 2, 180) &&
+        isValidId(data.studentUid) &&
+        isValidString(data.studentName, 1, 120) &&
+        isValidString(data.fileName, 1, 255) &&
+        isValidString(data.mimeType, 3, 128) &&
+        data.sizeBytes is number && data.sizeBytes >= 0 && data.sizeBytes <= 268435456 &&
+        isValidString(data.driveFileId, 1, 256) &&
+        isValidString(data.webViewLink, 8, 1024) &&
+        data.status in ['submitted', 'graded'] &&
+        isOptionalString(data, 'grade', 32) &&
+        isOptionalString(data, 'feedback', 2000) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['courseId', 'sessionId', 'sessionTitle', 'instructorUid', 'studentUid', 'studentName', 'studentEmail', 'status', 'source', 'joinedAt', 'meetJoinCount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['courseId', 'sessionId', 'sessionTitle', 'instructorUid', 'studentUid', 'studentName', 'studentEmail', 'status', 'source', 'joinedAt', 'meetJoinCount', 'markedByUid', 'notes', 'createdAt', 'updatedAt']) &&
+        isValidId(data.courseId) &&
+        isValidId(data.sessionId) &&
+        isValidString(data.sessionTitle, 1, 180) &&
+        isValidId(data.instructorUid) &&
+        isValidId(data.studentUid) &&
+        isValidString(data.studentName, 1, 120) &&
+        isValidString(data.studentEmail, 3, 254) &&
+        data.status in ['present', 'late', 'excused', 'absent'] &&
+        data.source in ['meet_join', 'meet_api_sync', 'manual'] &&
+        isValidString(data.joinedAt, 10, 64) &&
+        data.meetJoinCount is number && data.meetJoinCount >= 0 && data.meetJoinCount <= 500 &&
+        isOptionalId(data, 'markedByUid') &&
+        isOptionalString(data, 'notes', 500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // Collection Rules
+    // =========================================================================
+
+    // Trusted Admin Registry
+    match /admins/{adminUid} {
+      allow get: if isVerified() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
+      allow list: if isBootstrapAdmin();
+      allow create: if isVerified() && isValidId(adminUid) && isValidAdminRecord(incoming()) &&
+        incoming().uid == adminUid &&
+        incoming().grantedByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(adminUid) && isAdmin() && adminUid != request.auth.uid;
+    }
+
+    // Non-PII User Profiles & Registration Approval Status
+    match /users/{userId} {
+      allow get: if isVerified() && isValidId(userId) && (request.auth.uid == userId || isInstructor());
+      allow list: if isVerified() && (resource.data.uid == request.auth.uid || isBootstrapAdmin() || isAdmin());
+      allow create: if isVerified() && isValidId(userId) && isValidUserProfile(incoming()) &&
+        request.auth.uid == userId &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        !('approvedByUid' in incoming()) &&
+        !('approvedByName' in incoming()) && (
+          (incoming().role == 'student' && incoming().approvalStatus == 'pending') ||
+          (incoming().role == 'admin' && incoming().approvalStatus == 'approved' && isBootstrapAdmin())
+        );
+      allow update: if isVerified() && isValidId(userId) && isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action 1: Owner updates displayName, photoUrl, department, or registrationNote (never role or approvalStatus)
+          (request.auth.uid == userId &&
+            incoming().role == existing().role &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoUrl', 'department', 'registrationNote', 'updatedAt'])) ||
+          // Action 2: Admin updates role, approvalStatus, department, displayName, or photoUrl
+          (isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['role', 'approvalStatus', 'department', 'displayName', 'photoUrl', 'approvedByUid', 'approvedByName', 'updatedAt'])) ||
+          // Action 3: Instructor approves or rejects a student's registration (never elevates role)
+          (isInstructor() &&
+            existing().role == 'student' &&
+            incoming().role == 'student' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['approvalStatus', 'approvedByUid', 'approvedByName', 'updatedAt']))
+        );
+      allow delete: if false;
+
+      // Isolated PII Subcollection
+      match /private/{docId} {
+        allow get: if isVerified() && isValidId(userId) && isValidId(docId) && (request.auth.uid == userId || isAdmin());
+        allow list: if false;
+        allow create: if isVerified() && isValidId(userId) && docId == 'info' && isValidUserPrivateInfo(incoming()) &&
+          request.auth.uid == userId &&
+          incoming().uid == userId &&
+          incoming().email == request.auth.token.email &&
+          incoming().updatedAt == request.time;
+        allow update: if isVerified() && isValidId(userId) && docId == 'info' && isValidUserPrivateInfo(incoming()) &&
+          request.auth.uid == userId &&
+          incoming().uid == existing().uid &&
+          incoming().email == request.auth.token.email &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['email', 'phone', 'updatedAt']);
+        allow delete: if false;
+      }
+    }
+
+    // Student Account Registration Requests (Pending Admin / Instructor Approval)
+    match /registrationRequests/{requestId} {
+      allow get: if isVerified() && isValidId(requestId) && (
+        request.auth.uid == requestId ||
+        isInstructor()
+      );
+      allow list: if isVerified() && (
+        resource.data.uid == request.auth.uid ||
+        isInstructor()
+      );
+      allow create: if isVerified() && isValidId(requestId) && isValidRegistrationRequest(incoming()) &&
+        request.auth.uid == requestId &&
+        incoming().uid == requestId &&
+        incoming().email == request.auth.token.email &&
+        incoming().status == 'pending' &&
+        !('reviewedByUid' in incoming()) &&
+        !('reviewedByName' in incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(requestId) && isValidRegistrationRequest(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action 1: Admin or Instructor approves or rejects a registration request
+          (isInstructor() &&
+            incoming().reviewedByUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedByUid', 'reviewedByName', 'updatedAt'])) ||
+          // Action 2: Student updates their pending registration details
+          (request.auth.uid == requestId &&
+            existing().status == 'pending' &&
+            incoming().status == 'pending' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'department', 'note', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(requestId) && isAdmin();
+    }
+
+    // Email-Keyed Enrollments (Pre-Enrollment, Student Requests Pending Approval & Cohort Drive Roster)
+    match /enrollments/{enrollmentId} {
+      allow get: if isVerified() && isValidId(enrollmentId) && (
+        existing().memberEmail == request.auth.token.email ||
+        existing().memberUid == request.auth.uid ||
+        existing().instructorUid == request.auth.uid ||
+        isCourseStaff(existing().courseId) ||
+        isAdmin()
+      );
+      allow list: if isVerified() && (
+        isBootstrapAdmin() ||
+        isAdmin() ||
+        resource.data.memberEmail == request.auth.token.email ||
+        resource.data.memberUid == request.auth.uid ||
+        resource.data.instructorUid == request.auth.uid ||
+        resource.data.enrolledByUid == request.auth.uid
+      );
+      allow create: if isVerified() && isValidId(enrollmentId) && isValidEnrollment(incoming()) &&
+        incoming().enrolledByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        courseExists(incoming().courseId) &&
+        incoming().instructorUid == get(/databases/$(database)/documents/courses/$(incoming().courseId)).data.instructorUid && (
+          // Action 1: Course staff or admin invites a member directly
+          ((isCourseStaff(incoming().courseId) || isAdmin()) && incoming().status == 'invited') ||
+          // Action 2: Approved student requests enrollment in a course (pending approval)
+          (isApprovedUser() &&
+            incoming().memberUid == request.auth.uid &&
+            incoming().memberEmail == request.auth.token.email &&
+            incoming().courseRole == 'student' &&
+            incoming().status == 'pending')
+        );
+      allow update: if isVerified() && isValidId(enrollmentId) && isValidEnrollment(incoming()) &&
+        incoming().courseId == existing().courseId &&
+        incoming().instructorUid == existing().instructorUid &&
+        incoming().memberEmail == existing().memberEmail &&
+        incoming().enrolledByUid == existing().enrolledByUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action 1: Pre-invited member claims their own invitation upon login (never self-approves pending requests)
+          (existing().status == 'invited' &&
+            existing().memberEmail == request.auth.token.email &&
+            incoming().memberUid == request.auth.uid &&
+            incoming().status == 'active' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberUid', 'memberName', 'status', 'updatedAt'])) ||
+          // Action 2: Course instructor or admin approves/declines pending requests or updates role/status
+          ((isCourseStaff(existing().courseId) || isAdmin()) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberName', 'courseRole', 'status', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(enrollmentId) && (
+        isCourseStaff(existing().courseId) ||
+        isAdmin() ||
+        (existing().status == 'pending' && existing().memberUid == request.auth.uid)
+      );
+    }
+
+    // Courses & Master-Gate Subcollections
+    match /courses/{courseId} {
+      allow get: if isVerified() && isValidId(courseId) && (
+        existing().instructorUid == request.auth.uid ||
+        isCourseMember(courseId) ||
+        isApprovedUser()
+      );
+      allow list: if isVerified() && (
+        isBootstrapAdmin() ||
+        isAdmin() ||
+        resource.data.instructorUid == request.auth.uid ||
+        isApprovedUser()
+      );
+      allow create: if isVerified() && isValidId(courseId) && isValidCourse(incoming()) &&
+        incoming().instructorUid == request.auth.uid &&
+        incoming().instructorEmail == request.auth.token.email &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isInstructor();
+      allow update: if isVerified() && isValidId(courseId) && isValidCourse(incoming()) &&
+        incoming().instructorUid == existing().instructorUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action 1: Owning instructor or admin edits course details or Drive folder metadata
+          ((existing().instructorUid == request.auth.uid || isAdmin()) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['code', 'title', 'term', 'description', 'driveFolderId', 'driveFolderUrl', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(courseId) &&
+        (existing().instructorUid == request.auth.uid || isAdmin());
+
+      // Master Gate Members Subcollection (ONLY approved active or invited members)
+      match /members/{memberUid} {
+        allow get: if isVerified() && isValidId(courseId) && isValidId(memberUid) && (
+          request.auth.uid == memberUid ||
+          isCourseStaff(courseId) ||
+          isAdmin()
+        );
+        allow list: if isVerified() && (
+          isBootstrapAdmin() ||
+          isAdmin() ||
+          resource.data.instructorUid == request.auth.uid ||
+          resource.data.memberUid == request.auth.uid
+        );
+        allow create: if isVerified() && isValidId(courseId) && isValidId(memberUid) &&
+          isValidCourseMember(incoming()) &&
+          incoming().courseId == courseId &&
+          incoming().memberUid == memberUid &&
+          incoming().joinedAt == request.time &&
+          courseExists(courseId) &&
+          incoming().instructorUid == get(/databases/$(database)/documents/courses/$(courseId)).data.instructorUid && (
+            // Action 1: Verified enrolled user claims membership backed ONLY by an invited or active enrollment (NEVER pending/revoked)
+            (request.auth.uid == memberUid &&
+              exists(/databases/$(database)/documents/enrollments/$(incoming().enrollmentId)) &&
+              get(/databases/$(database)/documents/enrollments/$(incoming().enrollmentId)).data.courseId == courseId &&
+              get(/databases/$(database)/documents/enrollments/$(incoming().enrollmentId)).data.memberEmail == request.auth.token.email &&
+              get(/databases/$(database)/documents/enrollments/$(incoming().enrollmentId)).data.status in ['invited', 'active'] &&
+              get(/databases/$(database)/documents/enrollments/$(incoming().enrollmentId)).data.courseRole == incoming().courseRole) ||
+            // Action 2: Course instructor or admin approves or adds member directly
+            isCourseStaff(courseId) || isAdmin()
+          );
+        allow update: if isVerified() && isValidId(courseId) && isValidId(memberUid) &&
+          isValidCourseMember(incoming()) &&
+          incoming().courseId == existing().courseId &&
+          incoming().memberUid == existing().memberUid &&
+          incoming().instructorUid == existing().instructorUid &&
+          incoming().enrollmentId == existing().enrollmentId &&
+          incoming().joinedAt == existing().joinedAt &&
+          (isCourseStaff(courseId) || isAdmin()) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['courseRole', 'displayName']);
+        allow delete: if isVerified() && isValidId(courseId) && isValidId(memberUid) &&
+          (isCourseStaff(courseId) || isAdmin());
+      }
+
+      // Scheduled Google Meet Sessions (Approved users can view class schedule; Meet/recordings/resources remain gated)
+      match /sessions/{sessionId} {
+        allow get: if isVerified() && isValidId(courseId) && isValidId(sessionId) &&
+          (isCourseMember(courseId) || isCourseInstructor(courseId) || isAdmin() || isApprovedUser());
+        allow list: if isVerified() && resource.data.courseId == courseId &&
+          (isCourseMember(courseId) || isCourseInstructor(courseId) || isAdmin() || isApprovedUser());
+        allow create: if isVerified() && isValidId(courseId) && isValidId(sessionId) &&
+          isValidSession(incoming()) &&
+          'meetUri' in incoming() &&
+          incoming().courseId == courseId &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          courseExists(courseId) &&
+          incoming().instructorUid == get(/databases/$(database)/documents/courses/$(courseId)).data.instructorUid &&
+          isCourseStaff(courseId);
+        allow update: if isVerified() && isValidId(courseId) && isValidId(sessionId) &&
+          isValidSession(incoming()) &&
+          incoming().courseId == existing().courseId &&
+          incoming().instructorUid == existing().instructorUid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          isCourseStaff(courseId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'scheduledStart', 'scheduledEnd', 'meetUri', 'meetSpaceName', 'meetCode', 'calendarEventId', 'meetInviteDeleted', 'recordingStatus', 'updatedAt']);
+        allow delete: if isVerified() && isValidId(courseId) && isValidId(sessionId) && isCourseStaff(courseId);
+      }
+
+      // Synced Meet Recordings (STRICTLY protected for approved enrolled course members & staff ONLY)
+      match /recordings/{recordingId} {
+        allow get: if isVerified() && isValidId(courseId) && isValidId(recordingId) &&
+          (isCourseMember(courseId) || isCourseInstructor(courseId) || isAdmin());
+        allow list: if isVerified() && resource.data.courseId == courseId &&
+          (isCourseMember(courseId) || isCourseInstructor(courseId) || isAdmin());
+        allow create: if isVerified() && isValidId(courseId) && isValidId(recordingId) &&
+          isValidRecording(incoming()) &&
+          incoming().courseId == courseId &&
+          incoming().createdAt == request.time &&
+          incoming().lastAclSyncAt == request.time &&
+          courseExists(courseId) &&
+          exists(/databases/$(database)/documents/courses/$(courseId)/sessions/$(incoming().sessionId)) &&
+          incoming().instructorUid == get(/databases/$(database)/documents/courses/$(courseId)).data.instructorUid &&
+          isCourseStaff(courseId);
+        allow update: if isVerified() && isValidId(courseId) && isValidId(recordingId) &&
+          isValidRecording(incoming()) &&
+          incoming().courseId == existing().courseId &&
+          incoming().sessionId == existing().sessionId &&
+          incoming().instructorUid == existing().instructorUid &&
+          incoming().driveFileId == existing().driveFileId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().lastAclSyncAt == request.time &&
+          isCourseStaff(courseId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'sharedWithCount', 'lastAclSyncAt', 'durationLabel', 'webViewLink']);
+        allow delete: if isVerified() && isValidId(courseId) && isValidId(recordingId) && isCourseStaff(courseId);
+      }
+
+      // Course Resources Hosted on Google Drive (STRICTLY protected for approved enrolled course members & staff ONLY)
+      match /resources/{resourceId} {
+        allow get: if isVerified() && isValidId(courseId) && isValidId(resourceId) &&
+          (isCourseMember(courseId) || isCourseInstructor(courseId) || isAdmin());
+        allow list: if isVerified() && resource.data.courseId == courseId &&
+          (isCourseMember(courseId) || isCourseInstructor(courseId) || isAdmin());
+        allow create: if isVerified() && isValidId(courseId) && isValidId(resourceId) &&
+          isValidResource(incoming()) &&
+          incoming().courseId == courseId &&
+          incoming().uploadedByUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          courseExists(courseId) &&
+          incoming().instructorUid == get(/databases/$(database)/documents/courses/$(courseId)).data.instructorUid &&
+          (!('uploadedByRole' in incoming()) || incoming().uploadedByRole == 'instructor' || (incoming().uploadedByRole == 'admin' && isAdmin())) &&
+          (!('sessionId' in incoming()) || exists(/databases/$(database)/documents/courses/$(courseId)/sessions/$(incoming().sessionId))) &&
+          isCourseStaff(courseId);
+        allow update: if isVerified() && isValidId(courseId) && isValidId(resourceId) &&
+          isValidResource(incoming()) &&
+          incoming().courseId == existing().courseId &&
+          incoming().instructorUid == existing().instructorUid &&
+          incoming().driveFileId == existing().driveFileId &&
+          incoming().uploadedByUid == existing().uploadedByUid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (!('sessionId' in incoming()) || exists(/databases/$(database)/documents/courses/$(courseId)/sessions/$(incoming().sessionId))) &&
+          isCourseStaff(courseId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['moduleTitle', 'fileName', 'sessionId', 'sessionTitle', 'sharedWithCount', 'updatedAt']);
+        allow delete: if isVerified() && isValidId(courseId) && isValidId(resourceId) && isCourseStaff(courseId);
+      }
+
+      // Student Assignment Submissions (STRICTLY visible ONLY to the submitting student and course instructor/admin)
+      match /submissions/{submissionId} {
+        allow get: if isVerified() && isValidId(courseId) && isValidId(submissionId) && (
+          existing().studentUid == request.auth.uid ||
+          isCourseStaff(courseId)
+        );
+        allow list: if isVerified() && resource.data.courseId == courseId && (
+          resource.data.studentUid == request.auth.uid ||
+          isCourseStaff(courseId)
+        );
+        allow create: if isVerified() && isValidId(courseId) && isValidId(submissionId) &&
+          isValidSubmission(incoming()) &&
+          incoming().courseId == courseId &&
+          incoming().studentUid == request.auth.uid &&
+          incoming().status == 'submitted' &&
+          !('grade' in incoming()) &&
+          !('feedback' in incoming()) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          courseExists(courseId) &&
+          (!('sessionId' in incoming()) || exists(/databases/$(database)/documents/courses/$(courseId)/sessions/$(incoming().sessionId))) &&
+          incoming().instructorUid == get(/databases/$(database)/documents/courses/$(courseId)).data.instructorUid &&
+          isCourseMember(courseId);
+        allow update: if isVerified() && isValidId(courseId) && isValidId(submissionId) &&
+          isValidSubmission(incoming()) &&
+          incoming().courseId == existing().courseId &&
+          incoming().instructorUid == existing().instructorUid &&
+          incoming().studentUid == existing().studentUid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time && (
+            // Action 1: Instructor or admin grades submission
+            (isCourseStaff(courseId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'grade', 'feedback', 'updatedAt'])) ||
+            // Action 2: Student replaces attachment ONLY while not yet graded
+            (existing().studentUid == request.auth.uid &&
+              existing().status == 'submitted' &&
+              incoming().status == 'submitted' &&
+              !('grade' in incoming()) &&
+              !('feedback' in incoming()) &&
+              isCourseMember(courseId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['assignmentTitle', 'sessionId', 'sessionTitle', 'fileName', 'mimeType', 'sizeBytes', 'driveFileId', 'webViewLink', 'updatedAt']))
+          );
+        allow delete: if isVerified() && isValidId(courseId) && isValidId(submissionId) && (
+          isCourseStaff(courseId) ||
+          (existing().studentUid == request.auth.uid && existing().status == 'submitted' && isCourseMember(courseId))
+        );
+      }
+
+      // Google Meet Class Attendance (Accessible to Course Instructors & Admins; students check in upon joining Meet)
+      match /attendance/{attendanceId} {
+        allow get: if isVerified() && isValidId(courseId) && isValidId(attendanceId) && (
+          existing().studentUid == request.auth.uid ||
+          isCourseStaff(courseId)
+        );
+        allow list: if isVerified() && resource.data.courseId == courseId && isCourseStaff(courseId);
+        allow create: if isVerified() && isValidId(courseId) && isValidId(attendanceId) &&
+          isValidAttendance(incoming()) &&
+          incoming().courseId == courseId &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          courseExists(courseId) &&
+          exists(/databases/$(database)/documents/courses/$(courseId)/sessions/$(incoming().sessionId)) &&
+          incoming().instructorUid == get(/databases/$(database)/documents/courses/$(courseId)).data.instructorUid && (
+            // Action 1: Approved enrolled student automatically checks in when joining Google Meet
+            (isCourseMember(courseId) &&
+              incoming().studentUid == request.auth.uid &&
+              incoming().studentEmail == request.auth.token.email &&
+              incoming().status == 'present' &&
+              incoming().source == 'meet_join' &&
+              attendanceId == incoming().sessionId + '_' + request.auth.uid &&
+              !('markedByUid' in incoming())) ||
+            // Action 2: Instructor or Admin records or syncs attendance from Google Meet
+            isCourseStaff(courseId)
+          );
+        allow update: if isVerified() && isValidId(courseId) && isValidId(attendanceId) &&
+          isValidAttendance(incoming()) &&
+          incoming().courseId == existing().courseId &&
+          incoming().sessionId == existing().sessionId &&
+          incoming().instructorUid == existing().instructorUid &&
+          incoming().studentUid == existing().studentUid &&
+          incoming().studentEmail == existing().studentEmail &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time && (
+            // Action 1: Enrolled student re-joins the same Google Meet session
+            (isCourseMember(courseId) &&
+              existing().studentUid == request.auth.uid &&
+              incoming().status == existing().status &&
+              incoming().source == existing().source &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['joinedAt', 'meetJoinCount', 'updatedAt'])) ||
+            // Action 2: Instructor or Admin updates attendance status, Meet sync, or notes
+            (isCourseStaff(courseId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'source', 'joinedAt', 'meetJoinCount', 'markedByUid', 'notes', 'updatedAt']))
+          );
+        allow delete: if isVerified() && isValidId(courseId) && isValidId(attendanceId) && isCourseStaff(courseId);
+      }
+    }
+  }
+}

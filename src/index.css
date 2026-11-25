@@ -1,0 +1,299 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-paper: #FBF9F5;
+  --color-parchment: #F5F1E8;
+  --color-limestone: #E5DFD3;
+  --color-ink: #1C1917;
+  --color-stone-muted: #57534E;
+  --color-lapis: #1E3A8A;
+  --color-lapis-hover: #172E6E;
+  --color-bronze: #78350F;
+  --color-forest: #14532D;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    -webkit-text-size-adjust: 100%;
+    overflow-x: clip;
+  }
+
+  body {
+    overflow-x: clip;
+  }
+
+  h1, h2, h3, .font-editorial {
+    font-family: var(--font-serif);
+    text-wrap: balance;
+  }
+
+  code, pre, .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(30, 58, 138, 0.12);
+  }
+
+  button:not(:disabled),
+  a[href] {
+    cursor: pointer;
+  }
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Official Google Sign-In button styling (Material neutral) */
+.gsi-material-button {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  background-color: #ffffff;
+  background-image: none;
+  border: 1px solid #d6d0c4;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: #1c1917;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 44px;
+  letter-spacing: 0.01em;
+  outline: none;
+  overflow: hidden;
+  padding: 0 14px;
+  position: relative;
+  text-align: center;
+  transition: background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  vertical-align: middle;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .gsi-material-button {
+    min-height: 40px;
+    height: 40px;
+  }
+}
+
+.gsi-material-button:hover:not(:disabled) {
+  background-color: #f8f6f2;
+  border-color: #b8b0a0;
+}
+
+.gsi-material-button:focus-visible {
+  outline: 2px solid #1E3A8A;
+  outline-offset: 2px;
+}
+
+.gsi-material-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.gsi-material-button-content-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.gsi-material-button-icon {
+  height: 18px;
+  width: 18px;
+  min-width: 18px;
+}
+
+/* =========================================================================
+   Dark Mode Theme (Obsidian Warm Paper Palette)
+   ========================================================================= */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: #12100E;
+  --color-parchment: #1D1A17;
+  --color-limestone: #352F29;
+  --color-ink: #F5F2EB;
+  --color-stone-muted: #B4ABA0;
+}
+
+[data-theme="dark"] body {
+  background-color: #12100E;
+  color: #F5F2EB;
+}
+
+[data-theme="dark"] .bg-\[\#FBF9F5\] {
+  background-color: #12100E;
+}
+
+[data-theme="dark"] .bg-\[\#FBF9F5\]\/95 {
+  background-color: rgba(18, 16, 14, 0.94);
+}
+
+[data-theme="dark"] .bg-\[\#F5F1E8\] {
+  background-color: #1D1A17;
+}
+
+[data-theme="dark"] .bg-\[\#EBE6DF\] {
+  background-color: #2A2521;
+}
+
+[data-theme="dark"] .bg-\[\#D6D0C4\] {
+  background-color: #443C34;
+}
+
+[data-theme="dark"] .bg-\[\#1C1917\] {
+  background-color: #090807;
+}
+
+[data-theme="dark"] .bg-\[\#1C1917\]\/45 {
+  background-color: rgba(0, 0, 0, 0.72);
+}
+
+[data-theme="dark"] .bg-\[\#1E3A8A\] {
+  background-color: #2563EB;
+}
+
+[data-theme="dark"] .hover\:bg-\[\#172E6E\]:hover {
+  background-color: #1D4ED8;
+}
+
+[data-theme="dark"] .bg-\[\#14532D\] {
+  background-color: #166534;
+}
+
+[data-theme="dark"] .hover\:bg-\[\#0F3F22\]:hover {
+  background-color: #15803D;
+}
+
+[data-theme="dark"] .bg-\[\#78350F\] {
+  background-color: #B45309;
+}
+
+[data-theme="dark"] .hover\:bg-\[\#5E290B\]:hover {
+  background-color: #92400E;
+}
+
+[data-theme="dark"] .hover\:bg-\[\#EBE6DF\]:hover {
+  background-color: #2A2521;
+}
+
+[data-theme="dark"] .text-\[\#1C1917\] {
+  color: #F5F2EB;
+}
+
+[data-theme="dark"] .text-\[\#1C1917\]\/85 {
+  color: rgba(245, 242, 235, 0.88);
+}
+
+[data-theme="dark"] .text-\[\#57534E\] {
+  color: #B4ABA0;
+}
+
+[data-theme="dark"] .text-\[\#57534E\]\/80 {
+  color: rgba(180, 171, 160, 0.8);
+}
+
+[data-theme="dark"] .text-\[\#1E3A8A\] {
+  color: #93C5FD;
+}
+
+[data-theme="dark"] .text-\[\#14532D\] {
+  color: #6EE7B7;
+}
+
+[data-theme="dark"] .text-\[\#78350F\] {
+  color: #FCD34D;
+}
+
+[data-theme="dark"] .hover\:text-\[\#1C1917\]:hover {
+  color: #F5F2EB;
+}
+
+[data-theme="dark"] .active\:text-\[\#1C1917\]:active {
+  color: #F5F2EB;
+}
+
+[data-theme="dark"] .hover\:text-\[\#1E3A8A\]:hover {
+  color: #93C5FD;
+}
+
+[data-theme="dark"] .hover\:text-\[\#78350F\]:hover {
+  color: #FCD34D;
+}
+
+[data-theme="dark"] .border-\[\#E5DFD3\] {
+  border-color: #352F29;
+}
+
+[data-theme="dark"] .divide-\[\#E5DFD3\] > :not(:last-child) {
+  border-color: #352F29;
+}
+
+[data-theme="dark"] .border-\[\#1E3A8A\] {
+  border-color: #60A5FA;
+}
+
+[data-theme="dark"] .border-\[\#1E3A8A\]\/35 {
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+[data-theme="dark"] .border-\[\#1E3A8A\]\/40 {
+  border-color: rgba(96, 165, 250, 0.45);
+}
+
+[data-theme="dark"] .focus\:border-\[\#1E3A8A\]:focus {
+  border-color: #60A5FA;
+}
+
+[data-theme="dark"] .accent-\[\#1E3A8A\] {
+  accent-color: #60A5FA;
+}
+
+[data-theme="dark"] .gsi-material-button {
+  background-color: #1D1A17;
+  border-color: #443C34;
+  color: #F5F2EB;
+}
+
+[data-theme="dark"] .gsi-material-button:hover:not(:disabled) {
+  background-color: #2A2521;
+  border-color: #5C5248;
+}
