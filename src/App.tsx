@@ -55,7 +55,6 @@ import {
   CourseSession,
   Enrollment,
   RegistrationRequest,
-  UserRole,
 } from './types';
 
 const LOGO_IMAGE_SRC = '/assets/aistudio/4a52c352-b439-44b9-9ab2-e11bf7c67dfe_57428442.jpg';
@@ -85,9 +84,6 @@ function LMSWorkspace() {
     isAdmin,
     isInstructor,
     isApproved,
-    isPreviewing,
-    setPreviewRole,
-    canPreviewRoles,
     claimedCount,
     rememberDevice,
     setRememberDevice,
@@ -406,35 +402,22 @@ function LMSWorkspace() {
     return map;
   }, [activeCourseSessions]);
 
-  // Role resolution respects footer Preview View toggle without elevating real student privileges
   const getUserCourseRole = useCallback(
     (course: Course): 'owner' | 'co-instructor' | 'student' | 'admin' | 'prospective' => {
       if (effectiveRole === 'student') {
-        if (activeEnrolledCourseIds.has(course.id)) return 'student';
-        if (isPreviewing && hasRealCourseAccess(course)) return 'student';
-        return 'prospective';
+        return activeEnrolledCourseIds.has(course.id) ? 'student' : 'prospective';
       }
       if (effectiveRole === 'instructor') {
         if (user && course.instructorUid === user.uid) return 'owner';
         const match = activeUserEnrollments.find((e) => e.courseId === course.id);
         if (match?.courseRole === 'co-instructor') return 'co-instructor';
-        if (isPreviewing && actualIsAdmin) return 'owner';
         return 'prospective';
       }
       if (user && course.instructorUid === user.uid) return 'owner';
       if (isAdmin) return 'admin';
       return 'prospective';
     },
-    [
-      effectiveRole,
-      activeEnrolledCourseIds,
-      isPreviewing,
-      hasRealCourseAccess,
-      user,
-      activeUserEnrollments,
-      actualIsAdmin,
-      isAdmin,
-    ]
+    [effectiveRole, activeEnrolledCourseIds, user, activeUserEnrollments, isAdmin]
   );
 
   // Close the confirmation modal immediately before awaiting Workspace OAuth / API calls
@@ -493,7 +476,7 @@ function LMSWorkspace() {
   };
 
   const handleStudentJoinMeetFromClasses = (course: Course, ses: CourseSession) => {
-    if (user && getUserCourseRole(course) === 'student' && !isPreviewing) {
+    if (user && getUserCourseRole(course) === 'student') {
       void recordStudentMeetJoinAttendance({
         course,
         session: ses,
@@ -658,29 +641,6 @@ function LMSWorkspace() {
           user && isApproved ? 'pb-24 md:pb-14' : ''
         }`}
       >
-        {/* Role Preview Mode Banner (when Admin/Instructor switches footer view preview) */}
-        {user && isApproved && isPreviewing && (
-          <div
-            role="status"
-            className="bg-[#F5F1E8] border border-[#1E3A8A]/40 rounded-lg px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
-          >
-            <p className="text-xs sm:text-sm text-[#1E3A8A] flex items-center gap-2">
-              <Eye className="w-4 h-4 shrink-0" />
-              <span>
-                Previewing page as{' '}
-                <strong className="capitalize">{effectiveRole}</strong>. Switch views anytime in the
-                footer.
-              </span>
-            </p>
-            <button
-              type="button"
-              onClick={() => setPreviewRole(null)}
-              className="self-start sm:self-auto min-h-[36px] sm:min-h-0 px-3 py-1.5 text-xs font-medium text-[#1E3A8A] bg-[#FBF9F5] hover:bg-[#EBE6DF] border border-[#E5DFD3] rounded-md whitespace-nowrap"
-            >
-              Return to <span className="capitalize">{actualRole}</span> View
-            </button>
-          </div>
-        )}
         {/* Non-blocking Workspace action status banner */}
         {workingLabel && (
           <div
@@ -939,7 +899,7 @@ function LMSWorkspace() {
                         <p className="text-xs text-[#57534E] font-mono tabular-nums">
                           {myCourses.length} Active Course{myCourses.length === 1 ? '' : 's'}
                           <span className="mx-2">·</span>
-                          <span className="capitalize">{effectiveRole} View</span>
+                          <span className="capitalize">{effectiveRole}</span>
                         </p>
                         <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-[#1C1917]">
                           Your Courses
@@ -1817,42 +1777,6 @@ function LMSWorkspace() {
             />
             <span>NLFBC - School of Ministry</span>
           </span>
-
-          {/* Clickable Role View Preview Toggle (Student / Instructor / Admin) */}
-          {user && isApproved && canPreviewRoles.length > 1 && (
-            <div
-              role="group"
-              aria-label="Preview page view by role"
-              className="flex flex-wrap items-center gap-2"
-            >
-              <span className="font-mono text-[11px] text-[#57534E] inline-flex items-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 text-[#1E3A8A]" />
-                <span>Preview View:</span>
-              </span>
-              <div className="inline-flex items-center gap-0.5 p-0.5 bg-[#F5F1E8] border border-[#E5DFD3] rounded-md">
-                {canPreviewRoles.map((roleOption: UserRole) => {
-                  const isActive = effectiveRole === roleOption;
-                  return (
-                    <button
-                      key={roleOption}
-                      type="button"
-                      aria-pressed={isActive}
-                      onClick={() =>
-                        setPreviewRole(roleOption === actualRole ? null : roleOption)
-                      }
-                      className={`min-h-[36px] sm:min-h-0 px-2.5 py-1 text-xs font-medium capitalize rounded transition-colors ${
-                        isActive
-                          ? 'bg-[#1E3A8A] text-white'
-                          : 'text-[#57534E] hover:text-[#1C1917]'
-                      }`}
-                    >
-                      {roleOption}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {(!user || isApproved) && (
             <div className={`${user ? 'hidden md:flex' : 'flex'} items-center gap-5`}>

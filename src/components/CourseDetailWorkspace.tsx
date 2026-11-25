@@ -168,7 +168,6 @@ export const CourseDetailWorkspace: React.FC<CourseDetailWorkspaceProps> = ({
     isAdmin,
     isBootstrapAdmin,
     actualIsAdmin,
-    isPreviewing,
     ensureWorkspaceToken,
   } = useAuth();
   const isProspective = userCourseRole === 'prospective';
@@ -1321,7 +1320,7 @@ export const CourseDetailWorkspace: React.FC<CourseDetailWorkspaceProps> = ({
   };
 
   const handleStudentJoinMeet = (ses: CourseSession) => {
-    if (user && userCourseRole === 'student' && !isPreviewing) {
+    if (user && userCourseRole === 'student') {
       void recordStudentMeetJoinAttendance({
         course,
         session: ses,

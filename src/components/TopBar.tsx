@@ -39,7 +39,7 @@ function getInitials(name: string): string {
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ activeTab, onSelectTab }) => {
-  const { user, profile, isApproved, effectiveRole, isPreviewing, isSigningIn, signIn, signOut } =
+  const { user, profile, isApproved, effectiveRole, isSigningIn, signIn, signOut } =
     useAuth();
   const { theme, setTheme } = useTheme();
 
@@ -191,7 +191,6 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTab, onSelectTab }) => {
                         </p>
                         <p className="text-[11px] font-mono capitalize text-[#1E3A8A] mt-0.5">
                           {effectiveRole}
-                          {isPreviewing ? ' (Preview)' : ''}
                         </p>
                       </div>
                     </div>

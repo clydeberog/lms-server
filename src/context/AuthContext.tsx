@@ -29,20 +29,6 @@ export interface RememberedDeviceAccount {
   displayName: string;
 }
 
-const PREVIEW_ROLE_STORAGE_KEY = 'nlfbc_lms_preview_role';
-
-function readStoredPreviewRole(): UserRole | null {
-  try {
-    const raw = window.sessionStorage.getItem(PREVIEW_ROLE_STORAGE_KEY);
-    if (raw === 'student' || raw === 'instructor' || raw === 'admin') {
-      return raw;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 interface AuthContextValue {
   user: User | null;
   profile: UserProfile | null;
@@ -51,19 +37,12 @@ interface AuthContextValue {
   isSigningIn: boolean;
   authError: string | null;
   isBootstrapAdmin: boolean;
-  // Effective UI role flags (respects footer Role Preview toggle when enabled by staff/admin)
   isAdmin: boolean;
   isInstructor: boolean;
   effectiveRole: UserRole;
-  // True backend/Firestore role flags (never altered by UI preview mode)
   actualRole: UserRole;
   actualIsAdmin: boolean;
   actualIsInstructor: boolean;
-  // Footer View As Preview Mode controls
-  previewRole: UserRole | null;
-  setPreviewRole: (role: UserRole | null) => void;
-  canPreviewRoles: UserRole[];
-  isPreviewing: boolean;
   // Student Registration & Approval state
   needsRegistration: boolean;
   approvalStatus: ApprovalStatus;
@@ -101,9 +80,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [claimedCount, setClaimedCount] = useState(0);
   const [rememberDevice, setRememberDevice] = useState(true);
   const [rememberedAccount, setRememberedAccount] = useState<RememberedDeviceAccount | null>(null);
-  const [previewRoleState, setPreviewRoleState] = useState<UserRole | null>(() =>
-    typeof window !== 'undefined' ? readStoredPreviewRole() : null
-  );
 
   // Restore server-side HttpOnly Workspace cookie & remembered device hint on startup
   const syncServerSession = useCallback(async (expectedEmail?: string | null) => {
@@ -219,37 +195,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user, isApproved]);
 
-  const canPreviewRoles: UserRole[] = useMemo(() => {
-    if (actualRole === 'admin') return ['student', 'instructor', 'admin'];
-    if (actualRole === 'instructor') return ['student', 'instructor'];
-    return [];
-  }, [actualRole]);
-
-  const setPreviewRole = useCallback(
-    (role: UserRole | null) => {
-      const next =
-        role && canPreviewRoles.includes(role) && role !== actualRole ? role : null;
-      setPreviewRoleState(next);
-      try {
-        if (next) {
-          window.sessionStorage.setItem(PREVIEW_ROLE_STORAGE_KEY, next);
-        } else {
-          window.sessionStorage.removeItem(PREVIEW_ROLE_STORAGE_KEY);
-        }
-      } catch {
-        // Ignore storage errors
-      }
-    },
-    [actualRole, canPreviewRoles]
-  );
-
-  const effectivePreviewRole =
-    previewRoleState && canPreviewRoles.includes(previewRoleState) ? previewRoleState : null;
-  const effectiveRole: UserRole = effectivePreviewRole || actualRole;
-  const isPreviewing = effectiveRole !== actualRole;
-
-  const isAdmin = effectiveRole === 'admin';
-  const isInstructor = effectiveRole === 'admin' || effectiveRole === 'instructor';
+  const effectiveRole: UserRole = actualRole;
+  const isAdmin = actualIsAdmin;
+  const isInstructor = actualIsInstructor;
 
   const submitRegistration = useCallback(
     async (params: { displayName: string; department?: string; note?: string }) => {
@@ -354,12 +302,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (options?.forgetDevice) {
       setRememberedAccount(null);
     }
-    try {
-      window.sessionStorage.removeItem(PREVIEW_ROLE_STORAGE_KEY);
-    } catch {
-      // Ignore storage errors
-    }
-    setPreviewRoleState(null);
     await logoutUser();
     setUser(null);
     setProfile(null);
@@ -433,10 +375,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         actualRole,
         actualIsAdmin,
         actualIsInstructor,
-        previewRole: effectivePreviewRole,
-        setPreviewRole,
-        canPreviewRoles,
-        isPreviewing,
         needsRegistration,
         approvalStatus,
         isApproved,

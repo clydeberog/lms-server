@@ -97,7 +97,6 @@ export const AccountProfileModal: React.FC<AccountProfileModalProps> = ({
     user,
     profile,
     effectiveRole,
-    isPreviewing,
     workspaceToken,
     rememberedAccount,
     updateAccountProfile,
@@ -447,7 +446,6 @@ export const AccountProfileModal: React.FC<AccountProfileModalProps> = ({
                   <span className="block text-[#57534E]">Account Role</span>
                   <span className="font-medium capitalize text-[#1C1917]">
                     {effectiveRole}
-                    {isPreviewing ? ' (Preview)' : ''}
                   </span>
                 </div>
               </div>
