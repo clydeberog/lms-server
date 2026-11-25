@@ -23,6 +23,7 @@ import { GoogleSignInButton } from './components/GoogleSignInButton';
 import { AdminFacultyPanel } from './components/AdminFacultyPanel';
 import { CourseDetailWorkspace } from './components/CourseDetailWorkspace';
 import { ConfirmActionModal, ConfirmActionRequest } from './components/ConfirmActionModal';
+import { LegalPageType, LegalPageView } from './components/LegalPages';
 import { StudentRegistrationGate } from './components/StudentRegistrationGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import {
@@ -69,6 +70,15 @@ function formatResourceUploader(res: CourseResource, fallbackInstructorName: str
   return `${name} (${roleLabel})`;
 }
 
+type AppRoutePage = 'home' | LegalPageType;
+
+function resolvePageFromPathname(pathname: string): AppRoutePage {
+  const clean = pathname.toLowerCase().replace(/\/+$/, '') || '/';
+  if (clean === '/privacy' || clean === '/privacy-policy') return 'privacy';
+  if (clean === '/terms' || clean === '/terms-of-service') return 'terms';
+  return 'home';
+}
+
 function LMSWorkspace() {
   const {
     user,
@@ -93,6 +103,9 @@ function LMSWorkspace() {
     ensureWorkspaceToken,
   } = useAuth();
 
+  const [activePage, setActivePage] = useState<AppRoutePage>(() =>
+    typeof window !== 'undefined' ? resolvePageFromPathname(window.location.pathname) : 'home'
+  );
   const [activeTab, setActiveTab] = useState<ActiveNavTab>('courses');
   const [taughtCourses, setTaughtCourses] = useState<Course[]>([]);
   const [catalogCourses, setCatalogCourses] = useState<Course[]>([]);
@@ -132,6 +145,35 @@ function LMSWorkspace() {
   const notify = useCallback((message: string, tone: 'info' | 'success' | 'warn' = 'info') => {
     setNotice({ message, tone });
   }, []);
+
+  const navigateToPath = useCallback((path: '/' | '/privacy' | '/terms') => {
+    const nextPage = resolvePageFromPathname(path);
+    setActivePage(nextPage);
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname !== path) {
+        window.history.pushState({}, '', path);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActivePage(resolvePageFromPathname(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (activePage === 'privacy') {
+      document.title = 'Privacy Policy · NLFBC - School of Ministry';
+    } else if (activePage === 'terms') {
+      document.title = 'Terms of Service · NLFBC - School of Ministry';
+    } else {
+      document.title = 'NLFBC - School of Ministry';
+    }
+  }, [activePage]);
 
   // Auto-dismiss transient info/success notices so banners don't stay open waiting for manual dismissal
   useEffect(() => {
@@ -539,11 +581,14 @@ function LMSWorkspace() {
   };
 
   const handleSelectNavTab = (tab: ActiveNavTab) => {
+    if (activePage !== 'home') {
+      navigateToPath('/');
+    }
     setActiveTab(tab);
     if (tab === 'courses') {
       // Clicking Courses while already viewing Courses returns to the catalog list;
       // switching from Classes/Resources keeps the synced course context intact.
-      if (activeTab === 'courses') {
+      if (activeTab === 'courses' && activePage === 'home') {
         setSelectedCourseId(null);
       }
     } else if (!selectedCourseId && (myCourses[0] || browsableCourses[0])) {
@@ -682,8 +727,14 @@ function LMSWorkspace() {
           </div>
         )}
 
-        {/* MAIN CONTENT: Courses, Classes, Resources */}
-        {loading ? (
+        {/* MAIN CONTENT: Dedicated Legal Pages or Courses, Classes, Resources */}
+        {activePage === 'privacy' || activePage === 'terms' ? (
+          <LegalPageView
+            page={activePage}
+            onNavigateHome={() => navigateToPath('/')}
+            onNavigateLegal={(target) => navigateToPath(target === 'privacy' ? '/privacy' : '/terms')}
+          />
+        ) : loading ? (
           <div className="py-20 sm:py-24 text-center space-y-2">
             <p className="font-serif text-2xl text-[#1C1917]">Loading NLFBC - School of Ministry…</p>
             <p className="text-sm text-[#57534E]">
@@ -1778,31 +1829,65 @@ function LMSWorkspace() {
             <span>NLFBC - School of Ministry</span>
           </span>
 
-          {(!user || isApproved) && (
-            <div className={`${user ? 'hidden md:flex' : 'flex'} items-center gap-5`}>
-              <button
-                type="button"
-                onClick={() => handleSelectNavTab('courses')}
-                className="hover:text-[#1C1917] transition-colors"
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {(!user || isApproved) && (
+              <div className={`${user ? 'hidden md:flex' : 'flex'} items-center gap-5`}>
+                <button
+                  type="button"
+                  onClick={() => handleSelectNavTab('courses')}
+                  className="hover:text-[#1C1917] transition-colors"
+                >
+                  Courses
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectNavTab('classes')}
+                  className="hover:text-[#1C1917] transition-colors"
+                >
+                  Classes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectNavTab('resources')}
+                  className="hover:text-[#1C1917] transition-colors"
+                >
+                  Resources
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-5">
+              <a
+                href="/privacy"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateToPath('/privacy');
+                }}
+                aria-current={activePage === 'privacy' ? 'page' : undefined}
+                className={`transition-colors ${
+                  activePage === 'privacy'
+                    ? 'text-[#1E3A8A] font-medium'
+                    : 'hover:text-[#1C1917]'
+                }`}
               >
-                Courses
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectNavTab('classes')}
-                className="hover:text-[#1C1917] transition-colors"
+                Privacy Policy
+              </a>
+              <a
+                href="/terms"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateToPath('/terms');
+                }}
+                aria-current={activePage === 'terms' ? 'page' : undefined}
+                className={`transition-colors ${
+                  activePage === 'terms'
+                    ? 'text-[#1E3A8A] font-medium'
+                    : 'hover:text-[#1C1917]'
+                }`}
               >
-                Classes
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectNavTab('resources')}
-                className="hover:text-[#1C1917] transition-colors"
-              >
-                Resources
-              </button>
+                Terms of Service
+              </a>
             </div>
-          )}
+          </div>
         </div>
       </footer>
 
